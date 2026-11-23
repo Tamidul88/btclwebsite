@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "bergertech",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd ../bergertech && exec php artisan serve --port=8123"],
+      "port": 8123
+    },
+    {
+      "name": "consulting",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["artisan", "serve", "--port=8199"],
+      "port": 8199
+    }
+  ]
+}

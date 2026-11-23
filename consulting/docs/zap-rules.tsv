@@ -1,0 +1,11 @@
+10063	IGNORE	(Permissions-Policy) ZAP signature is stale; header is present and asserted by SecurityHeadersTest
+10035	IGNORE	(HSTS) Deliberately absent over plain http; emitted only when request()->secure() — see SecurityHeaders
+10098	WARN	(Cross-Domain Misconfiguration) review any hit; we set no permissive CORS
+10021	FAIL	(X-Content-Type-Options missing) must never regress
+10020	FAIL	(Anti-clickjacking header missing) must never regress
+10038	FAIL	(CSP header missing) must never regress
+40012	FAIL	(Reflected XSS) must never regress
+40014	FAIL	(Persistent XSS) must never regress
+40018	FAIL	(SQL injection) must never regress
+90020	FAIL	(Remote OS command injection) must never regress
+6	FAIL	(Path traversal) must never regress

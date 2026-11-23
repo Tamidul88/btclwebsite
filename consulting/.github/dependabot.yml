@@ -1,0 +1,35 @@
+version: 2
+
+updates:
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels: [dependencies, php]
+    groups:
+      # Patch/minor bumps land as one PR to keep review load sane; majors come
+      # individually because they need real attention.
+      php-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: laravel/framework
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels: [dependencies, javascript]
+    groups:
+      js-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [dependencies, ci]

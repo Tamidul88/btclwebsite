@@ -1,0 +1,101 @@
+@import 'tailwindcss';
+
+/*
+ * Self-hosted, bundled by Vite. Loading this from a font CDN would require
+ * adding that origin to style-src and font-src, which both weakens the policy
+ * and hands every visitor's IP to a third party on first paint.
+ */
+@import '@fontsource-variable/inter/index.css';
+
+@source '../views';
+@source '../../app';
+
+@theme {
+    --color-ink: #0f172a;
+    --color-brand-50:  #eef4ff;
+    --color-brand-100: #dbe6ff;
+    --color-brand-200: #bed2ff;
+    --color-brand-300: #91b3ff;
+    --color-brand-400: #5d89fb;
+    --color-brand-500: #3862f0;
+    --color-brand-600: #2145d6;
+    --color-brand-700: #1b36ad;
+    --color-brand-800: #1b3089;
+    --color-brand-900: #1b2d6d;
+    --color-brand-950: #131c42;
+
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+    /*
+     * Alpine's x-cloak needs this in a stylesheet, not an inline <style>:
+     * the strict CSP has no 'unsafe-inline' for styles.
+     */
+    [x-cloak] { display: none !important; }
+
+    /*
+     * Hides the honeypot inputs. This lives here rather than as an inline
+     * style attribute on the element, because style-src has no
+     * 'unsafe-inline' and the browser would drop it — leaving the field
+     * visible to real visitors. See resources/views/vendor/honeypot/.
+     */
+    .honeypot-field {
+        position: absolute !important;
+        left: -9999px !important;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+    }
+
+    h1, h2, h3, h4 {
+        @apply font-semibold tracking-tight text-ink;
+        text-wrap: balance;
+    }
+    :focus-visible {
+        @apply outline-2 outline-offset-2 outline-brand-600;
+    }
+}
+
+@utility container-page {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+}
+
+@utility btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3
+           text-sm font-semibold transition duration-200;
+}
+
+@utility btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+}
+
+@utility btn-secondary {
+    @apply btn border border-slate-300 bg-white text-ink hover:border-brand-600 hover:text-brand-700;
+}
+
+@utility field {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-[15px] text-ink
+           transition placeholder:text-slate-400
+           focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 focus:outline-none;
+}
+
+@utility field-error {
+    @apply border-red-500 focus:border-red-500 focus:ring-red-500/20;
+}
+
+@utility label {
+    @apply mb-1.5 block text-sm font-medium text-ink;
+}
+
+@utility eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.18em] text-brand-600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+    }
+}

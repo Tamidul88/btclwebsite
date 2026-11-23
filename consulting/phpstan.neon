@@ -1,0 +1,33 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    # "High level" per the brief. 8 is the highest that is practical on a
+    # Laravel/Filament codebase without drowning in framework magic.
+    level: 8
+
+    paths:
+        - app
+        - config
+        - database
+        - routes
+
+    # tests/ is deliberately excluded. Pest binds $this inside test closures to
+    # the Laravel TestCase at runtime, which PHPStan cannot model — analysing
+    # them produces ~80 false "undefined method ::get/::post" errors that would
+    # bury real findings. The suite is verified by running it, not by analysing
+    # its closures.
+
+    ignoreErrors:
+        # Filament resources declare static contracts whose $record parameter
+        # is intentionally untyped in the framework signature.
+        -
+            identifier: missingType.parameter
+            path: app/Filament/Resources/*.php
+        # Eloquent scopes added by spatie/laravel-permission's HasRoles.
+        -
+            message: '#undefined method .*Builder<App\\Models\\User>::role\(\)#'
+            path: app/Policies/UserPolicy.php
+
+    checkModelProperties: true
+    reportUnmatchedIgnoredErrors: false

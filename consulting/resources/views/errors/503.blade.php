@@ -1,0 +1,17 @@
+@extends('layouts.app')
+@section('title', 'Back shortly — '.config('site.company'))
+@section('robots', 'noindex, nofollow')
+
+@section('content')
+    <section class="container-page flex min-h-[55vh] max-w-xl flex-col justify-center py-20 text-center">
+        <p class="text-sm font-semibold tracking-[0.2em] text-brand-600">503</p>
+        <h1 class="mt-4 text-4xl">Back shortly</h1>
+        {{-- Deliberately generic: error pages must never echo request data or
+             internal detail, in any environment. --}}
+        <p class="mt-4 text-[15px] leading-relaxed">We are carrying out brief maintenance.</p>
+        <div class="mt-8 flex justify-center gap-3">
+            <a href="{{ route('home') }}" class="btn-primary">Back to the homepage</a>
+            <a href="{{ route('contact') }}" class="btn-secondary">Contact us</a>
+        </div>
+    </section>
+@endsection

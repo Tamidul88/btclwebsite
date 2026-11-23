@@ -1,0 +1,235 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Advisory databases change without any commit of ours, so audit on a
+    # timer as well as on push. A clean PR today can be vulnerable tomorrow.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PHP_VERSION: '8.4'
+
+jobs:
+  security-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+
+      # Fails the build on any known advisory in the locked dependency tree.
+      # This is the gate that would have caught Laravel 11's unpatched
+      # CVE-2026-48019 before it ever reached a deploy.
+      - name: composer audit
+        run: composer audit --locked --no-interaction
+
+      - run: npm ci
+      - name: npm audit
+        run: npm audit --audit-level=moderate
+
+  static-analysis:
+    name: Larastan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: ./vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+  code-style:
+    name: Pint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: ./vendor/bin/pint --test
+
+  tests:
+    name: Pest (PHP ${{ matrix.php }}, ${{ matrix.db }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4']
+        db: [sqlite, mysql]
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: consulting_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, gd, fileinfo, pdo_mysql, bcmath
+          coverage: xdebug
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: npm ci && npm run build
+
+      - run: cp .env.example .env
+      - run: php artisan key:generate
+
+      # The suite runs against MySQL 8 as well as SQLite, so behaviour that
+      # differs between them (strict mode, collation, JSON columns) is caught
+      # in CI even though local development uses SQLite.
+      - name: Configure database
+        run: |
+          if [ "${{ matrix.db }}" = "mysql" ]; then
+            {
+              echo "DB_CONNECTION=mysql"
+              echo "DB_HOST=127.0.0.1"
+              echo "DB_PORT=3306"
+              echo "DB_DATABASE=consulting_test"
+              echo "DB_USERNAME=root"
+              echo "DB_PASSWORD=root"
+            } >> .env
+          else
+            echo "DB_CONNECTION=sqlite" >> .env
+            echo "DB_DATABASE=:memory:" >> .env
+          fi
+
+      - run: php artisan migrate --force
+
+      - name: Pest
+        run: ./vendor/bin/pest --ci
+
+  security-baseline:
+    name: Security baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+      # --no-dev on purpose: this job verifies a production-shaped install,
+      # and one of the checks is that test tooling is absent.
+      - run: composer install --no-interaction --prefer-dist --no-progress --no-dev
+
+      - name: Prepare a production-shaped environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          # cp leaves 644; a real deploy sets 600 and the audit checks for it.
+          chmod 600 .env
+          # .env.example ships deliberate placeholders. Substituting them here
+          # keeps the job honest: it verifies the committed *defaults* are
+          # safe, rather than failing on values an operator is meant to fill.
+          sed -i 's|^ADMIN_PATH=.*|ADMIN_PATH=ci-verification-only|' .env
+          sed -i 's|^DB_PASSWORD=.*|DB_PASSWORD=ci-placeholder-not-a-real-secret|' .env
+
+      # Replaces Enlightn, which cannot be installed: its last release
+      # (v2.10.0, April 2024) caps at Laravel 11 and pins larastan ^2.0,
+      # while Laravel 12 requires larastan ^3.0. The checks it is known for
+      # are implemented in this command instead, and it additionally knows
+      # about this app's own controls (admin path, 2FA, upload policy).
+      - name: Production security baseline
+        run: php artisan security:audit --production
+
+  zap-baseline:
+    name: OWASP ZAP baseline
+    runs-on: ubuntu-latest
+    # Weekly, plus PRs that touch anything ZAP would actually exercise.
+    # Not on every push: a scan slow enough to be annoying gets ignored.
+    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, gd, fileinfo, sqlite3
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: npm ci && npm run build
+
+      - name: Boot the app
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          {
+            echo "DB_CONNECTION=sqlite"
+            echo "DB_DATABASE=$(pwd)/database/scan.sqlite"
+            echo "SESSION_SECURE_COOKIE=false"
+            echo "HSTS_ENABLED=false"
+            # Otherwise the limiter returns 429 for the whole scan and ZAP
+            # reports a clean site because it never reached the application.
+            echo "LOGIN_MAX_ATTEMPTS=100000"
+            # Otherwise every form POST is silently dropped as spam.
+            echo "HONEYPOT_ENABLED=false"
+          } >> .env
+          touch database/scan.sqlite
+          php artisan migrate --force
+          php artisan serve --port=8199 &
+          timeout 30 bash -c 'until curl -sf http://127.0.0.1:8199/up >/dev/null; do sleep 1; done'
+
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: http://127.0.0.1:8199
+          rules_file_name: docs/zap-rules.tsv
+          # Passive scan only; fails the job on any FAIL-level rule.
+          cmd_options: '-a'
+          allow_issue_writing: false
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
